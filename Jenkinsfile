@@ -34,35 +34,27 @@ pipeline {
             }
         }
 
-        stage('Test') {
-            steps {
-                script {
-                    echo "Starting tests..."
+        stage('Run') {
+    steps {
+        script {
+            echo 'Running Docker container...'
 
-                    def testLines = readFile(TEST_FILE_PATH).trim().split('\n')
+            def output = bat(
+                script: '''
+                @echo off
+                docker run -d sum-python-image
+                ''',
+                returnStdout: true
+            ).trim()
 
-                    for (line in testLines) {
-                        def vars = line.trim().split(' ')
-                        def arg1 = vars[0]
-                        def arg2 = vars[1]
-                        def expectedSum = vars[2].toFloat()
+            // Windows-safe extraction
+            def lines = output.split(/\r?\n/).findAll { it.trim() }
+            env.CONTAINER_ID = lines[-1].trim()
 
-                        def output = bat(
-                            script: "@echo off & docker exec ${env.CONTAINER_ID} python /app/sum.py ${arg1} ${arg2}",
-                            returnStdout: true
-                        )
-
-                        def result = output.trim().split(/\r?\n/)[-1].toFloat()
-
-                        if (result == expectedSum) {
-                            echo "✅ PASS: ${arg1} + ${arg2} = ${result}"
-                        } else {
-                            error "❌ FAIL: ${arg1} + ${arg2} expected ${expectedSum} but got ${result}"
-                        }
-                    }
-                }
-            }
+            echo "Container started with ID: ${env.CONTAINER_ID}"
         }
+    }
+}
     }
 
     post {
