@@ -3,12 +3,11 @@ pipeline {
 
     environment {
         CONTAINER_ID = ''
-        SUM_PY_PATH = 'sum.py'
-        DIR_PATH = '.'
         TEST_FILE_PATH = 'test_variables.txt'
     }
 
     stages {
+
         stage('Build') {
             steps {
                 echo 'Building Docker image...'
@@ -20,17 +19,21 @@ pipeline {
             steps {
                 script {
                     echo 'Running Docker container...'
+
                     def output = bat(
-                        script: 'docker run -d sum-python-image tail -f /dev/null',
+                        script: '@echo off & docker run -d sum-python-image tail -f /dev/null',
                         returnStdout: true
                     )
-                    CONTAINER_ID = output.trim()
-                    echo "Container started with ID: ${CONTAINER_ID}"
+
+                    // ✅ Windows-safe + Jenkins-safe
+                    def lines = output.trim().split(/\r?\n/)
+                    env.CONTAINER_ID = lines[-1].trim()
+
+                    echo "Container started with ID: ${env.CONTAINER_ID}"
                 }
             }
         }
 
-        // 👇 ADD TEST STAGE HERE
         stage('Test') {
             steps {
                 script {
@@ -45,11 +48,11 @@ pipeline {
                         def expectedSum = vars[2].toFloat()
 
                         def output = bat(
-                            script: "docker exec ${CONTAINER_ID} python /app/sum.py ${arg1} ${arg2}",
+                            script: "@echo off & docker exec ${env.CONTAINER_ID} python /app/sum.py ${arg1} ${arg2}",
                             returnStdout: true
                         )
 
-                        def result = output.trim().split('\n')[-1].toFloat()
+                        def result = output.trim().split(/\r?\n/)[-1].toFloat()
 
                         if (result == expectedSum) {
                             echo "✅ PASS: ${arg1} + ${arg2} = ${result}"
@@ -57,6 +60,17 @@ pipeline {
                             error "❌ FAIL: ${arg1} + ${arg2} expected ${expectedSum} but got ${result}"
                         }
                     }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                if (env.CONTAINER_ID?.trim()) {
+                    echo "Cleaning up container ${env.CONTAINER_ID}"
+                    bat "@echo off & docker rm -f ${env.CONTAINER_ID}"
                 }
             }
         }
