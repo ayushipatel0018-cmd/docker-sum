@@ -16,26 +16,24 @@ pipeline {
             }
         }
 
-        stage('Run') {
-            steps {
-                script {
-                    echo 'Running Docker container...'
+       stage('Run') {
+    steps {
+        script {
+            echo 'Running Docker container...'
 
-                    def output = bat(
-                        script: '''
-                        @echo off
-                        docker run -d sum-python-image
-                        ''',
-                        returnStdout: true
-                    ).trim()
+            // Start container and capture ID
+            def output = bat(
+                script: '@echo off & for /f "tokens=*" %i in (\'docker run -d sum-python-image\') do @echo %i',
+                returnStdout: true
+            ).trim()
 
-                    def lines = output.split(/\r?\n/).findAll { it.trim() }
-                    env.CONTAINER_ID = lines[-1].trim()
+            env.CONTAINER_ID = output
 
-                    echo "Container started with ID: ${env.CONTAINER_ID}"
-                }
-            }
+            echo "Container started with ID: ${env.CONTAINER_ID}"
         }
+    }
+}
+
 
         stage('Test') {
             steps {
